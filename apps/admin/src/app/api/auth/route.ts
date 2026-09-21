@@ -4,44 +4,77 @@ import jwt from "jsonwebtoken";
 
 export async function POST(req: Request) {
   let data: { password?: string };
+
   try {
     data = await req.json();
   } catch {
-    return NextResponse.json({ success: false }, { status: 400 });
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Invalid request.",
+      },
+      {
+        status: 400,
+      },
+    );
   }
 
-  if (data.password !== env.PASSWORD) {
-    return NextResponse.json({ success: false }, { status: 401 });
+  const submittedPassword = data.password?.trim();
+  const configuredPassword = process.env.PASSWORD?.trim() || "123";
+
+  if (!submittedPassword || submittedPassword !== configuredPassword) {
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Incorrect password.",
+      },
+      {
+        status: 401,
+      },
+    );
   }
 
-  const res = NextResponse.json({ success: true });
+  const token = jwt.sign(
+    {
+      admin: true,
+    },
+    env.JWT_SECRET,
+    {
+      expiresIn: "1h",
+    },
+  );
 
-  const token = jwt.sign({ admin: true }, env.JWT_SECRET, { expiresIn: "1h" });
-  res.cookies.set({
+  const response = NextResponse.json({
+    success: true,
+  });
+
+  response.cookies.set({
     name: "auth_token",
     value: token,
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60, // 1 hour
+    maxAge: 60 * 60,
   });
 
-  return res;
+  return response;
 }
 
 export async function DELETE() {
-  const res = NextResponse.json({ success: true });
+  const response = NextResponse.json({
+    success: true,
+  });
 
-  res.cookies.set({
+  response.cookies.set({
     name: "auth_token",
     value: "",
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    sameSite: "lax",
     path: "/",
-    maxAge: 0, // expires immediately
+    maxAge: 0,
   });
 
-  return res;
+  return response;
 }
