@@ -2,7 +2,9 @@ name: Major Assignment CI
 
 on:
   push:
-    branches: [main, master]
+    branches:
+      - main
+      - master
   pull_request:
   workflow_dispatch:
 
@@ -11,7 +13,9 @@ permissions:
 
 jobs:
   test-and-build:
+    name: Test and Build
     runs-on: ubuntu-latest
+
     env:
       CI: true
       E2E: true
@@ -24,7 +28,7 @@ jobs:
       CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up pnpm
@@ -46,24 +50,35 @@ jobs:
           pnpm --filter @repo/db db:push
           pnpm --filter @repo/db db:seed
 
-      - name: Check types
+      - name: Check TypeScript types
         run: pnpm turbo run check-types --concurrency=1
 
       - name: Install Playwright Chromium
         run: pnpm --filter @repo/playwright exec playwright install chromium --with-deps
 
       - name: Run unit and component tests
-        run: pnpm turbo run test --concurrency=1
+        run: |
+          pnpm --filter @repo/utils test
+          pnpm --filter @repo/ui test
+          pnpm --filter @repo/web test
 
       - name: Build applications
         run: pnpm turbo build
 
       - name: Run end-to-end tests
-        run: pnpm --filter @repo/playwright exec playwright test --grep-invert "upload an image" --project=chromium --project=chromium-web-home --project=chromium-web
+        run: >
+          pnpm --filter @repo/playwright exec playwright test
+          --grep-invert "upload an image"
+          --project=chromium
+          --project=chromium-web-home
+          --project=chromium-web
 
       - name: Run Cloudinary upload test
         if: ${{ env.CLOUDINARY_CLOUD_NAME != '' }}
-        run: pnpm --filter @repo/playwright exec playwright test tests/admin/post-upload.spec.ts --project=chromium
+        run: >
+          pnpm --filter @repo/playwright exec playwright test
+          tests/admin/post-upload.spec.ts
+          --project=chromium
 
       - name: Upload Playwright report
         if: always()
@@ -74,3 +89,4 @@ jobs:
             tests/playwright/playwright-report
             tests/playwright/test-results
           if-no-files-found: ignore
+          retention-days: 7
