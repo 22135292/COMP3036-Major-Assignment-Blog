@@ -1,0 +1,22 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "tests/*"
+
+overrides:
+  markdown-it: 13.0.2
+
+onlyBuiltDependencies:
+  - "@parcel/watcher"
+  - "@prisma/client"
+  - "@prisma/engines"
+  - core-js-pure
+  - esbuild
+  - msw
+  - prisma
+  - sharp
+
+allowBuilds:
+  '@prisma/client': set this to true or false
+  '@prisma/engines': set this to true or false
+  prisma: set this to true or false

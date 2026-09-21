@@ -1,0 +1,27 @@
+{
+  "name": "assignment-cms",
+  "private": true,
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "test": "turbo run all:test --concurrency=1",
+    "test:e2e": "pnpm --filter @repo/playwright test",
+    "test:e2e:image": "pnpm --filter @repo/playwright test:img-upload",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.4",
+    "typescript": "5.7.3"
+  },
+  "packageManager": "pnpm@10.2.0",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.3.1",
+    "prettier-plugin-tailwindcss": "^0.6.11",
+    "prisma": "^6.3.1"
+  }
+}
