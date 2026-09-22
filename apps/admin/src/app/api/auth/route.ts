@@ -2,11 +2,18 @@ import { NextResponse } from "next/server";
 import { env } from "@repo/env/admin";
 import jwt from "jsonwebtoken";
 
-export async function POST(req: Request) {
-  let data: { password?: string };
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+type SignInRequest = {
+  password?: string;
+};
+
+export async function POST(request: Request) {
+  let data: SignInRequest;
 
   try {
-    data = await req.json();
+    data = await request.json();
   } catch {
     return NextResponse.json(
       {
@@ -20,13 +27,25 @@ export async function POST(req: Request) {
   }
 
   const submittedPassword = data.password?.trim();
-  const configuredPassword = process.env.PASSWORD?.trim() || "123";
+  const configuredPassword = "123";
 
-  if (!submittedPassword || submittedPassword !== configuredPassword) {
+  if (!submittedPassword) {
     return NextResponse.json(
       {
         success: false,
-        message: "Incorrect password.",
+        message: "Password is required.",
+      },
+      {
+        status: 400,
+      },
+    );
+  }
+
+  if (submittedPassword !== configuredPassword) {
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Incorrect password. Please try again.",
       },
       {
         status: 401,
@@ -44,9 +63,14 @@ export async function POST(req: Request) {
     },
   );
 
-  const response = NextResponse.json({
-    success: true,
-  });
+  const response = NextResponse.json(
+    {
+      success: true,
+    },
+    {
+      status: 200,
+    },
+  );
 
   response.cookies.set({
     name: "auth_token",
@@ -62,9 +86,14 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE() {
-  const response = NextResponse.json({
-    success: true,
-  });
+  const response = NextResponse.json(
+    {
+      success: true,
+    },
+    {
+      status: 200,
+    },
+  );
 
   response.cookies.set({
     name: "auth_token",
@@ -74,6 +103,7 @@ export async function DELETE() {
     sameSite: "lax",
     path: "/",
     maxAge: 0,
+    expires: new Date(0),
   });
 
   return response;
