@@ -2,7 +2,6 @@
 
 import TiptapEditor from "./TiptapEditor";
 import { marked } from "marked";
-
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { PostSchema, PostSchemaType } from "@/utils/form/post.form";
@@ -12,7 +11,6 @@ import {
   CardContent,
   CardFooter,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import {
   Field,
@@ -28,23 +26,34 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+const CREATE_DRAFT_KEY = "full-stack-blog:create-post-draft";
+
 type PostFormProps = {
-  defaultValues?: Partial<PostSchemaType> & { urlId?: string }; // urlId needed for update
+  defaultValues?: Partial<PostSchemaType> & {
+    urlId?: string;
+  };
   mode: "create" | "edit";
 };
 
 export function PostForm({ defaultValues, mode }: PostFormProps) {
   const router = useRouter();
+
   const [isUploading, setIsUploading] = useState(false);
+  const [savedDraft, setSavedDraft] = useState<PostSchemaType | null>(null);
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [editorMode, setEditorMode] = useState<"markdown" | "richtext">(
     "markdown",
   );
 
-  // Markdown specific state
   const [showPreview, setShowPreview] = useState(false);
   const [previewHtml, setPreviewHtml] = useState("");
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const cursorPositionRef = useRef<{ start: number; end: number } | null>(null);
+  const cursorPositionRef = useRef<{
+    start: number;
+    end: number;
+  } | null>(null);
 
   const form = useForm<PostSchemaType>({
     resolver: zodResolver(PostSchema),
@@ -61,18 +70,88 @@ export function PostForm({ defaultValues, mode }: PostFormProps) {
   const imageUrl = form.watch("imageUrl");
   const content = form.watch("content");
 
-  // Generate preview HTML when content changes or preview is toggled (Markdown mode)
+  useEffect(() => {
+    if (mode !== "create") {
+      setDraftReady(true);
+      return;
+    }
+
+    try {
+      const storedDraft = window.localStorage.getItem(CREATE_DRAFT_KEY);
+
+      if (storedDraft) {
+        setSavedDraft(JSON.parse(storedDraft) as PostSchemaType);
+      }
+    } catch {
+      window.localStorage.removeItem(CREATE_DRAFT_KEY);
+    } finally {
+      setDraftReady(true);
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode !== "create" || !draftReady) {
+      return;
+    }
+
+    const subscription = form.watch((values) => {
+      const draft = values as PostSchemaType;
+
+      const hasContent = Object.values(draft).some(
+        (value) => typeof value === "string" && value.trim().length > 0,
+      );
+
+      if (!hasContent) {
+        return;
+      }
+
+      window.localStorage.setItem(
+        CREATE_DRAFT_KEY,
+        JSON.stringify(draft),
+      );
+
+      setDraftSavedAt(
+        new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      );
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [draftReady, form, mode]);
+
+  const restoreDraft = () => {
+    if (!savedDraft) {
+      return;
+    }
+
+    form.reset(savedDraft);
+    setSavedDraft(null);
+    toast.success("Draft restored");
+  };
+
+  const discardDraft = () => {
+    window.localStorage.removeItem(CREATE_DRAFT_KEY);
+    setSavedDraft(null);
+    setDraftSavedAt(null);
+    toast.success("Saved draft removed");
+  };
+
   useEffect(() => {
     if (editorMode === "markdown" && showPreview && content) {
       const parseContent = async () => {
         const html = await marked.parse(content);
         setPreviewHtml(html);
       };
-      parseContent();
+
+      void parseContent();
     }
   }, [showPreview, content, editorMode]);
 
-  const handlePreviewToggle = async () => {
+  const handlePreviewToggle = () => {
     if (!showPreview) {
       if (textareaRef.current) {
         cursorPositionRef.current = {
@@ -80,80 +159,90 @@ export function PostForm({ defaultValues, mode }: PostFormProps) {
           end: textareaRef.current.selectionEnd,
         };
       }
+
       setShowPreview(true);
-    } else {
-      setShowPreview(false);
-      setTimeout(() => {
-        if (textareaRef.current && cursorPositionRef.current) {
-          textareaRef.current.focus();
-          textareaRef.current.setSelectionRange(
-            cursorPositionRef.current.start,
-            cursorPositionRef.current.end,
-          );
-        }
-      }, 0);
+      return;
     }
+
+    setShowPreview(false);
+
+    window.setTimeout(() => {
+      if (textareaRef.current && cursorPositionRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(
+          cursorPositionRef.current.start,
+          cursorPositionRef.current.end,
+        );
+      }
+    }, 0);
   };
 
   const onSubmit = async (data: PostSchemaType) => {
-    let result;
-    if (mode === "edit" && defaultValues?.urlId) {
-      result = await updatePost(defaultValues.urlId, data);
-    } else {
-      result = await createPost(data);
-    }
+    const result =
+      mode === "edit" && defaultValues?.urlId
+        ? await updatePost(defaultValues.urlId, data)
+        : await createPost(data);
 
     if (result.error) {
-      // Global error
-      // form.setError("root", { message: result.error });
       toast.error(result.error);
-    } else {
-      // Success feedback
-      toast.success(
-        mode === "create"
-          ? "Post created successfully"
-          : "Post updated successfully",
-      );
-
-      if (result.success) {
-        if (
-          mode === "create" ||
-          (result.urlId && result.urlId !== defaultValues?.urlId)
-        ) {
-          router.push(`/post/${result.urlId}`);
-        } else {
-          router.refresh(); // Refresh page data
-        }
-      }
+      return;
     }
+
+    toast.success(
+      mode === "create"
+        ? "Post created successfully"
+        : "Post updated successfully",
+    );
+
+    if (!result.success) {
+      return;
+    }
+
+    if (mode === "create") {
+      window.localStorage.removeItem(CREATE_DRAFT_KEY);
+    }
+
+    if (
+      mode === "create" ||
+      (result.urlId && result.urlId !== defaultValues?.urlId)
+    ) {
+      router.push(`/post/${result.urlId}`);
+      return;
+    }
+
+    router.refresh();
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleImageUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
 
     if (!file.type.startsWith("image/")) {
       toast.error("Please select an image file");
-      e.target.value = "";
+      event.target.value = "";
       return;
     }
 
     if (file.size > 10 * 1024 * 1024) {
       toast.error("The image must be smaller than 10 MB");
-      e.target.value = "";
+      event.target.value = "";
       return;
     }
 
     try {
       setIsUploading(true);
 
-      // Use urlId if editing, or derive from title if creating (if title is set)
-      // Otherwise fallback to undefined (random name)
       let publicId = defaultValues?.urlId;
+
       if (!publicId && mode === "create") {
         const title = form.getValues("title");
+
         if (title) {
-          // simple slugify
           publicId = title
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, "-")
@@ -161,10 +250,16 @@ export function PostForm({ defaultValues, mode }: PostFormProps) {
         }
       }
 
-      const { timestamp, signature, apiKey, cloudName, folder } =
-        await getCloudinarySignature(publicId);
+      const {
+        timestamp,
+        signature,
+        apiKey,
+        cloudName,
+        folder,
+      } = await getCloudinarySignature(publicId);
 
       const formData = new FormData();
+
       formData.append("file", file);
       formData.append("api_key", apiKey);
       formData.append("timestamp", timestamp.toString());
@@ -185,11 +280,19 @@ export function PostForm({ defaultValues, mode }: PostFormProps) {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error?.message || "Upload failed");
+
+        throw new Error(
+          errorData.error?.message || "Upload failed",
+        );
       }
 
       const data = await response.json();
-      form.setValue("imageUrl", data.secure_url);
+
+      form.setValue("imageUrl", data.secure_url, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+
       toast.success("Image uploaded successfully");
     } catch (error) {
       console.error(error);
@@ -202,61 +305,119 @@ export function PostForm({ defaultValues, mode }: PostFormProps) {
   return (
     <Card className="mx-auto w-full max-w-5xl rounded-[1.75rem] border-slate-200 bg-white shadow-xl shadow-slate-200/50">
       <CardHeader className="border-b border-slate-100 px-6 py-6 md:px-8">
-        <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#a31631]">Content studio</p>
-        <CardTitle className="text-3xl font-black tracking-tight text-slate-950">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#a31631]">
+          Content studio
+        </p>
+
+        <h1 className="text-3xl font-black tracking-tight text-slate-950">
           {mode === "create" ? "Create Post" : "Update Post"}
-        </CardTitle>
+        </h1>
       </CardHeader>
+
       <CardContent className="px-6 py-7 md:px-8">
+        {mode === "create" && savedDraft && (
+          <div
+            data-test-id="draft-recovery"
+            className="mb-6 flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div>
+              <p className="font-semibold text-slate-950">
+                Unsaved draft found
+              </p>
+
+              <p className="text-sm text-slate-600">
+                Restore your locally saved work or remove it.
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={discardDraft}
+              >
+                Discard
+              </Button>
+
+              <Button
+                type="button"
+                onClick={restoreDraft}
+              >
+                Restore draft
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {mode === "create" && draftSavedAt && !savedDraft && (
+          <p
+            data-test-id="draft-status"
+            className="mb-4 text-right text-xs font-medium text-emerald-700"
+          >
+            Draft saved locally at {draftSavedAt}
+          </p>
+        )}
+
         {Object.keys(form.formState.errors).length > 0 && (
           <div className="mb-4 text-red-500">
             Please fix the errors before saving
           </div>
         )}
 
-        <form id="post-form" onSubmit={form.handleSubmit(onSubmit)}>
+        <form
+          id="post-form"
+          onSubmit={form.handleSubmit(onSubmit)}
+        >
           <FieldGroup>
-            {/* Title */}
             <Controller
               name="title"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="title">Title</FieldLabel>
+                  <FieldLabel htmlFor="title">
+                    Title
+                  </FieldLabel>
+
                   <Input
                     {...field}
                     id="title"
                     aria-invalid={fieldState.invalid}
                   />
+
                   <FieldError errors={[fieldState.error]} />
                 </Field>
               )}
             />
 
-            {/* Category */}
             <Controller
               name="category"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="category">Category</FieldLabel>
+                  <FieldLabel htmlFor="category">
+                    Category
+                  </FieldLabel>
+
                   <Input
                     {...field}
                     id="category"
                     aria-invalid={fieldState.invalid}
                   />
+
                   <FieldError errors={[fieldState.error]} />
                 </Field>
               )}
             />
 
-            {/* Description */}
             <Controller
               name="description"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="description">Description</FieldLabel>
+                  <FieldLabel htmlFor="description">
+                    Description
+                  </FieldLabel>
+
                   <textarea
                     {...field}
                     id="description"
@@ -266,19 +427,22 @@ export function PostForm({ defaultValues, mode }: PostFormProps) {
                     )}
                     aria-invalid={fieldState.invalid}
                   />
+
                   <FieldError errors={[fieldState.error]} />
                 </Field>
               )}
             />
 
-            {/* Content */}
             <Controller
               name="content"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
                   <div className="mb-2 flex items-center justify-between">
-                    <FieldLabel htmlFor="content">Content</FieldLabel>
+                    <FieldLabel htmlFor="content">
+                      Content
+                    </FieldLabel>
+
                     <div className="bg-muted flex h-8 items-center rounded-md p-1">
                       <button
                         type="button"
@@ -292,6 +456,7 @@ export function PostForm({ defaultValues, mode }: PostFormProps) {
                       >
                         Markdown
                       </button>
+
                       <button
                         type="button"
                         onClick={() => setEditorMode("richtext")}
@@ -313,15 +478,16 @@ export function PostForm({ defaultValues, mode }: PostFormProps) {
                         <div
                           data-test-id="content-preview"
                           className="prose prose-sm min-h-[150px] w-full max-w-none rounded-md border p-3"
-                          dangerouslySetInnerHTML={{ __html: previewHtml }}
+                          dangerouslySetInnerHTML={{
+                            __html: previewHtml,
+                          }}
                         />
                       ) : (
                         <textarea
                           {...field}
-                          ref={(e) => {
-                            field.ref(e);
-                            // @ts-ignore
-                            textareaRef.current = e;
+                          ref={(element) => {
+                            field.ref(element);
+                            textareaRef.current = element;
                           }}
                           id="content"
                           data-test-id="content"
@@ -332,6 +498,7 @@ export function PostForm({ defaultValues, mode }: PostFormProps) {
                           aria-invalid={fieldState.invalid}
                         />
                       )}
+
                       <Button
                         type="button"
                         variant="outline"
@@ -339,31 +506,40 @@ export function PostForm({ defaultValues, mode }: PostFormProps) {
                         className="mt-2"
                         onClick={handlePreviewToggle}
                       >
-                        {showPreview ? "Close Preview" : "Preview"}
+                        {showPreview
+                          ? "Close Preview"
+                          : "Preview"}
                       </Button>
                     </>
                   ) : (
                     <TiptapEditor
                       value={field.value}
                       onChange={field.onChange}
-                      className={cn(fieldState.invalid && "border-red-500")}
+                      className={cn(
+                        fieldState.invalid && "border-red-500",
+                      )}
                     />
                   )}
+
                   <FieldError errors={[fieldState.error]} />
                 </Field>
               )}
             />
 
-            {/* Image URL */}
             <Controller
               name="imageUrl"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="image-url">Cover image</FieldLabel>
+                  <FieldLabel htmlFor="image-url">
+                    Cover image
+                  </FieldLabel>
+
                   <p className="text-sm text-slate-500">
-                    Paste a direct image URL, or choose an image from your computer.
+                    Paste a direct image URL, or choose an image
+                    from your computer.
                   </p>
+
                   <div className="mb-2 flex flex-col gap-3 sm:flex-row">
                     <Input
                       {...field}
@@ -372,6 +548,7 @@ export function PostForm({ defaultValues, mode }: PostFormProps) {
                       aria-invalid={fieldState.invalid}
                       placeholder="https://example.com/photo.jpg"
                     />
+
                     <div className="relative">
                       <Input
                         type="file"
@@ -380,6 +557,7 @@ export function PostForm({ defaultValues, mode }: PostFormProps) {
                         onChange={handleImageUpload}
                         disabled={isUploading}
                       />
+
                       {isUploading && (
                         <div className="bg-background/50 absolute inset-0 flex items-center justify-center text-xs">
                           Uploading...
@@ -387,6 +565,7 @@ export function PostForm({ defaultValues, mode }: PostFormProps) {
                       )}
                     </div>
                   </div>
+
                   {imageUrl && !fieldState.invalid && (
                     <div className="mt-2">
                       <img
@@ -397,24 +576,28 @@ export function PostForm({ defaultValues, mode }: PostFormProps) {
                       />
                     </div>
                   )}
+
                   <FieldError errors={[fieldState.error]} />
                 </Field>
               )}
             />
 
-            {/* Tags */}
             <Controller
               name="tags"
               control={form.control}
               render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="tags">Tags</FieldLabel>
+                  <FieldLabel htmlFor="tags">
+                    Tags
+                  </FieldLabel>
+
                   <Input
                     {...field}
                     id="tags"
                     aria-invalid={fieldState.invalid}
                     placeholder="tag1, tag2"
                   />
+
                   <FieldError errors={[fieldState.error]} />
                 </Field>
               )}
@@ -422,11 +605,15 @@ export function PostForm({ defaultValues, mode }: PostFormProps) {
           </FieldGroup>
         </form>
       </CardContent>
+
       <CardFooter className="justify-end border-t border-slate-100 px-6 py-5 md:px-8">
         <Button
           type="submit"
           form="post-form"
-          disabled={isUploading || form.formState.isSubmitting}
+          disabled={
+            isUploading ||
+            form.formState.isSubmitting
+          }
           className="min-w-32 rounded-xl bg-[#a31631] hover:bg-[#841229]"
         >
           Save

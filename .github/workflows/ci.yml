@@ -15,6 +15,7 @@ jobs:
   test-and-build:
     name: Test and Build
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     env:
       CI: true
@@ -23,27 +24,30 @@ jobs:
       DATABASE_URL: file:${{ github.workspace }}/packages/db/prisma/dev.db
       PASSWORD: "123"
       JWT_SECRET: major-assignment-ci-secret
-      CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
-      CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
-      CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+
+      # The upload request is mocked by Playwright.
+      CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME || 'e2e-cloud' }}
+      CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY || 'e2e-key' }}
+      CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET || 'e2e-secret' }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up pnpm
+      - name: Set up PNPM
         uses: pnpm/action-setup@v4
-        with:
-          version: 10.2.0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm --filter @repo/db db:generate
 
       - name: Prepare database
         run: |
@@ -52,9 +56,6 @@ jobs:
 
       - name: Check TypeScript types
         run: pnpm turbo run check-types --concurrency=1
-
-      - name: Install Playwright Chromium
-        run: pnpm --filter @repo/playwright exec playwright install chromium --with-deps
 
       - name: Run unit and component tests
         run: |
@@ -65,20 +66,15 @@ jobs:
       - name: Build applications
         run: pnpm turbo build
 
+      - name: Install Playwright Chromium
+        run: pnpm --filter @repo/playwright exec playwright install chromium --with-deps
+
       - name: Run end-to-end tests
         run: >
           pnpm --filter @repo/playwright exec playwright test
-          --grep-invert "upload an image"
           --project=chromium
           --project=chromium-web-home
           --project=chromium-web
-
-      - name: Run Cloudinary upload test
-        if: ${{ env.CLOUDINARY_CLOUD_NAME != '' }}
-        run: >
-          pnpm --filter @repo/playwright exec playwright test
-          tests/admin/post-upload.spec.ts
-          --project=chromium
 
       - name: Upload Playwright report
         if: always()

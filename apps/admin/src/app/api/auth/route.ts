@@ -76,7 +76,9 @@ export async function POST(request: Request) {
     name: "auth_token",
     value: token,
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    // Production builds are also used by Playwright on HTTP localhost.
+    // Mark the cookie as secure only when the current request uses HTTPS.
+    secure: new URL(request.url).protocol === "https:",
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60,
@@ -85,7 +87,7 @@ export async function POST(request: Request) {
   return response;
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
   const response = NextResponse.json(
     {
       success: true,
@@ -99,7 +101,7 @@ export async function DELETE() {
     name: "auth_token",
     value: "",
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: new URL(request.url).protocol === "https:",
     sameSite: "lax",
     path: "/",
     maxAge: 0,
