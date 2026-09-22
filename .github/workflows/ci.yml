@@ -34,6 +34,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # The PNPM version is read from package.json.
       - name: Set up PNPM
         uses: pnpm/action-setup@v4
 
@@ -70,28 +71,34 @@ jobs:
         run: pnpm --filter @repo/playwright exec playwright install chromium --with-deps
 
       - name: Run end-to-end tests
-        env:
-        CI: true
         run: >
           pnpm --filter @repo/playwright exec playwright test
           --project=chromium
           --project=chromium-web-home
           --project=chromium-web
 
-      - name: Upload Playwright HTML report
-  if: always()
-  uses: actions/upload-artifact@v4
-  with:
-    name: playwright-html-report
-    path: tests/playwright/playwright-report/
-    retention-days: 14
-    if-no-files-found: warn
+      - name: Verify Playwright output
+        if: always()
+        shell: bash
+        run: |
+          echo "Playwright output directories:"
+          find tests/playwright/playwright-report -maxdepth 2 -type f -print 2>/dev/null || true
+          find tests/playwright/test-results -maxdepth 2 -type f -print 2>/dev/null || true
 
-  -name: Upload Playwright test results
-  if: always()
-  uses: actions/upload-artifact@v4
-  with:
-    name: playwright-test-results
-    path: tests/playwright/test-results/
-    retention-days: 14
-    if-no-files-found: ignore
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-html-report
+          path: tests/playwright/playwright-report/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload Playwright test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: tests/playwright/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
