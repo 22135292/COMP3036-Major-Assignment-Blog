@@ -35,14 +35,17 @@ export default defineConfig({
   workers: process.env.CI ? 1 : 1,
 
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: [["list"]], // process.env.CI ? [["list"]] : [["list"], ["html"]],
+ reporter: [
+  ["list"],
+  ["html", { outputFolder: "playwright-report", open: "never" }],
+], // process.env.CI ? [["list"]] : [["list"], ["html"]],
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
     baseURL: "http://localhost:3002",
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: "on-first-retry",
+    trace: "retain-on-failure",
 
     /* I use custom test id attribute */
     testIdAttribute: "data-test-id",
