@@ -15,7 +15,7 @@ The refreshed responsive interface uses an editorial visual system for readers a
 
 ## Submission links
 
-- Repository URL: add your GitHub/GitLab URL here
+- Repository URL: [add your GitHub/GitLab URL here](https://github.com/22135292/COMP3036-Major-Assignment-Blog)
 - Deployed public app: add the port 3001 deployment URL here
 - Deployed admin app: add the port 3002 deployment URL here
 - Demo video: add the 3–5 minute video URL here
