@@ -58,6 +58,8 @@ jobs:
       - name: Check TypeScript types
         run: pnpm turbo run check-types --concurrency=1
 
+      - name: Install Playwright Chromium
+        run: pnpm --filter @repo/playwright exec playwright install chromium --with-deps
       - name: Run unit and component tests
         run: |
           pnpm --filter @repo/utils test
@@ -67,8 +69,7 @@ jobs:
       - name: Build applications
         run: pnpm turbo build
 
-      - name: Install Playwright Chromium
-        run: pnpm --filter @repo/playwright exec playwright install chromium --with-deps
+      
 
       - name: Run end-to-end tests
         run: >
