@@ -13,11 +13,24 @@ test.describe("ADMIN HOME SCREEN", () => {
     },
     async ({ page }) => {
       await page.goto("/");
-      await expect(page.getByText("Sign In", { exact: true })).toBeVisible();
 
-      // HOME SCREEN > Shows Login screen if not logged
       await expect(
-        page.getByText("Sign in to your account", { exact: true }),
+        page.getByRole("button", {
+          name: /sign in/i,
+        }),
+      ).toBeVisible();
+
+      await expect(
+        page.getByRole("heading", {
+          name: "Welcome back.",
+          exact: true,
+        }),
+      ).toBeVisible();
+
+      await expect(
+        page.getByLabel("Password", {
+          exact: true,
+        }),
       ).toBeVisible();
     },
   );
@@ -30,27 +43,69 @@ test.describe("ADMIN HOME SCREEN", () => {
     async ({ page }) => {
       await page.goto("/");
 
-      // HOME SCREEN > Authenticate the current client using a hard-coded password
-      await page.getByLabel("Password", { exact: true }).fill("123");
-      await page.getByText("Sign In", { exact: true }).click();
+      await page
+        .getByLabel("Password", {
+          exact: true,
+        })
+        .fill("123");
 
-      await expect(page.getByText("Admin of Full Stack Blog")).toBeVisible();
+      await page
+        .getByRole("button", {
+          name: /sign in/i,
+        })
+        .click();
 
-      // HOME SCREEN > Use a cookie to remember the signed-in state.
-      const cookies = await page.context().cookies();
-      const passwordCookie = cookies.find(
-        (cookie) => cookie.name === "auth_token",
+      await page.waitForURL("/", {
+        timeout: 15_000,
+      });
+
+      await expect(
+        page.getByText("Full Stack Blog", {
+          exact: true,
+        }),
+      ).toBeVisible();
+
+      const cookies =
+        await page.context().cookies();
+
+      const authCookie = cookies.find(
+        (cookie) =>
+          cookie.name === "auth_token",
       );
-      expect(passwordCookie).toBeDefined();
 
-      // HOME SCREEN > There must be logout button
-      await expect(page.getByText("Logout")).toBeVisible();
+      expect(authCookie).toBeDefined();
 
-      //  HOME SCREEN > Clicking the logout button logs user out
-      await page.getByText("Logout").click();
+      await expect(
+        page.getByRole("button", {
+          name: "Logout",
+          exact: true,
+        }),
+      ).toBeVisible();
 
-      await expect(await page.locator("article")).toHaveCount(0);
-      await expect(page.getByText("Sign in to your account")).toBeVisible();
+      await page
+        .getByRole("button", {
+          name: "Logout",
+          exact: true,
+        })
+        .click();
+
+      await page.waitForURL(
+        /\/sign-in$/,
+        {
+          timeout: 15_000,
+        },
+      );
+
+      await expect(
+        page.getByRole("heading", {
+          name: "Welcome back.",
+          exact: true,
+        }),
+      ).toBeVisible();
+
+      await expect(
+        page.locator("article"),
+      ).toHaveCount(0);
     },
   );
 
@@ -60,15 +115,22 @@ test.describe("ADMIN HOME SCREEN", () => {
       tag: "@a2",
     },
     async ({ userPage }) => {
-      await userPage.goto("/?page=1&limit=6");
+      await userPage.goto(
+        "/?page=1&limit=6",
+      );
 
-      // shows title
       await expect(
-        userPage.getByText("Admin of Full Stack Blog", { exact: true }),
+        userPage.getByText(
+          "Full Stack Blog",
+          {
+            exact: true,
+          },
+        ),
       ).toBeVisible();
 
-      // LIST SCREEN > Article list is only accessible to logged-in users.
-      await expect(await userPage.locator("article").count()).toBe(6);
+      await expect(
+        userPage.locator("article"),
+      ).toHaveCount(6);
     },
   );
 });
