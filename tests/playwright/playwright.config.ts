@@ -1,160 +1,106 @@
 import { defineConfig, devices } from "@playwright/test";
 import "dotenv/config";
-/**
- * Read environment variables from file.
- * https://github.com/motdotla/dotenv
- */
-// import dotenv from 'dotenv';
-// import path from 'path';
-// dotenv.config({ path: path.resolve(__dirname, '.env') });
-
 import fs from "fs";
 import path from "path";
 
-// Define the directory path
 const authDir = path.resolve(".auth");
 
-// Create .auth directory if it doesn't exist
-if (!fs.existsSync(authDir)) {
-  fs.mkdirSync(authDir);
-  console.log(".auth directory created");
-}
+fs.mkdirSync(authDir, {
+  recursive: true,
+});
 
-/**
- * See https://playwright.dev/docs/test-configuration.
- */
 export default defineConfig({
   testDir: "./tests",
-  /* Run tests in files in parallel */
+
   fullyParallel: false,
-  /* Fail the build on CI if you accidentally left test.only in the source code. */
-  forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
+  forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
-  /* Opt out of parallel tests on CI. */
   workers: process.env.CI ? 1 : 1,
 
-  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
- reporter: [
-  ["list"],
-  ["html", { outputFolder: "playwright-report", open: "never" }],
-], // process.env.CI ? [["list"]] : [["list"], ["html"]],
-  /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
+  reporter: [
+    ["list"],
+    [
+      "html",
+      {
+        outputFolder: "playwright-report",
+        open: "never",
+      },
+    ],
+  ],
+
   use: {
-    /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: "http://localhost:3002",
-
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
+    baseURL: "http://127.0.0.1:3002",
     trace: "retain-on-failure",
-
-    /* I use custom test id attribute */
     testIdAttribute: "data-test-id",
-
-    /* Screenshot only on failure */
     screenshot: "only-on-failure",
-
-    /* Video only on failure */
     video: "retain-on-failure",
   },
 
-  /* Configure projects for major browsers */
   projects: [
-    { name: "setup", testMatch: /.*\.setup\.ts/ },
+    {
+      name: "setup",
+      testMatch: /.*\.setup\.ts/,
+    },
     {
       name: "chromium",
       testDir: "./tests/admin",
       use: {
         ...devices["Desktop Chrome"],
-        baseURL: "http://localhost:3002",
+        baseURL: "http://127.0.0.1:3002",
+        storageState: ".auth/user.json",
       },
-      dependencies: process.env.CI ? ["setup"] : [],
+      dependencies: ["setup"],
     },
-    // {
-    //   name: "chromium",
-    //   testDir: "./tests/web",
-    //   use: {
-    //     ...devices["Desktop Chrome"],
-    //     baseURL: "http://localhost:3001",
-    //   },
-    //   dependencies: process.env.CI ? ["setup"] : [],
-    // },
     {
       name: "chromium-web-home",
       testDir: "./tests/web",
       testMatch: /home-screen\.spec\.ts/,
-      use: { ...devices["Desktop Chrome"], baseURL: "http://localhost:3001" },
-      dependencies: process.env.CI ? ["setup"] : [],
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: "http://127.0.0.1:3001",
+      },
     },
-
     {
       name: "chromium-web",
       testDir: "./tests/web",
       testIgnore: /home-screen\.spec\.ts/,
-      use: { ...devices["Desktop Chrome"], baseURL: "http://localhost:3001" },
-      dependencies: process.env.CI
-        ? ["chromium-web-home", "setup"]
-        : ["chromium-web-home"],
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: "http://127.0.0.1:3001",
+      },
+      dependencies: ["chromium-web-home"],
     },
-
-    // {
-    //   name: "firefox",
-    //   use: { ...devices["Desktop Firefox"] },
-    //   dependencies: process.env.CI ? ["setup"] : [],
-    // },
-
-    // {
-    //   name: "webkit",
-    //   use: { ...devices["Desktop Safari"] },
-    //   dependencies: process.env.CI ? ["setup"] : [],
-    // },
-
-    /* Test against mobile viewports. */
     {
-  name: "mobile-chrome",
-  testDir: "./tests/web",
-  use: {
-    ...devices["Pixel 5"],
-    baseURL: "http://localhost:3001",
-  },
-},
-{
-  name: "mobile-safari",
-  testDir: "./tests/web",
-  use: {
-    ...devices["iPhone 13"],
-    baseURL: "http://localhost:3001",
-  },
-},
-    // {
-    //   name: 'Mobile Safari',
-    //   use: { ...devices['iPhone 12'] },
-    // },
-
-    /* Test against branded browsers. */
-    // {
-    //   name: 'Microsoft Edge',
-    //   use: { ...devices['Desktop Edge'], channel: 'msedge' },
-    // },
-    // {
-    //   name: 'Google Chrome',
-    //   use: { ...devices['Desktop Chrome'], channel: 'chrome' },
-    // },
+      name: "mobile-chrome",
+      testDir: "./tests/web",
+      use: {
+        ...devices["Pixel 5"],
+        baseURL: "http://127.0.0.1:3001",
+      },
+    },
+    {
+      name: "mobile-safari",
+      testDir: "./tests/web",
+      use: {
+        ...devices["iPhone 13"],
+        baseURL: "http://127.0.0.1:3001",
+      },
+    },
   ],
 
-  /* Run your local dev server before starting the tests */
   webServer: process.env.CI
     ? [
         {
-          reuseExistingServer: true,
           command: "pnpm start:admin",
-          url: "http://localhost:3002",
-          // reuseExistingServer: !process.env.CI,
+          url: "http://127.0.0.1:3002",
+          reuseExistingServer: false,
+          timeout: 120_000,
         },
         {
-          reuseExistingServer: true,
           command: "pnpm start:web",
-          url: "http://localhost:3001",
-          // reuseExistingServer: !process.env.CI,
+          url: "http://127.0.0.1:3001",
+          reuseExistingServer: false,
+          timeout: 120_000,
         },
       ]
     : undefined,
