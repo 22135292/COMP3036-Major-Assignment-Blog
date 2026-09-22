@@ -70,19 +70,28 @@ jobs:
         run: pnpm --filter @repo/playwright exec playwright install chromium --with-deps
 
       - name: Run end-to-end tests
+        env:
+        CI: true
         run: >
           pnpm --filter @repo/playwright exec playwright test
           --project=chromium
           --project=chromium-web-home
           --project=chromium-web
 
-      - name: Upload Playwright report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-results
-          path: |
-            tests/playwright/playwright-report
-            tests/playwright/test-results
-          if-no-files-found: ignore
-          retention-days: 7
+      - name: Upload Playwright HTML report
+  if: always()
+  uses: actions/upload-artifact@v4
+  with:
+    name: playwright-html-report
+    path: tests/playwright/playwright-report/
+    retention-days: 14
+    if-no-files-found: warn
+
+  -name: Upload Playwright test results
+  if: always()
+  uses: actions/upload-artifact@v4
+  with:
+    name: playwright-test-results
+    path: tests/playwright/test-results/
+    retention-days: 14
+    if-no-files-found: ignore
